@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Threadline</title>
+  <style>
+    body { font-family: system-ui, sans-serif; width: 260px; padding: 12px 16px; margin: 0; }
+    h3 { margin: 0 0 8px; font-size: 15px; }
+    .status { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+    .dot.connected { background: #22c55e; }
+    .dot.disconnected { background: #ef4444; }
+    .meta { font-size: 11px; color: #666; margin-top: 8px; }
+    a { font-size: 12px; color: #0070f3; cursor: pointer; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h3>Threadline</h3>
+  <div class="status">
+    <div class="dot" id="dot"></div>
+    <span id="statusText">Checking...</span>
+  </div>
+  <div class="meta" id="lastEvent"></div>
+  <br>
+  <a id="optionsLink">Open Options</a>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

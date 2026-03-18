@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Threadline Options</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 24px auto; padding: 0 16px; }
+    label { display: block; margin-bottom: 4px; font-weight: 500; }
+    input[type="text"] { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .field { margin-bottom: 16px; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; }
+    button { padding: 8px 16px; background: #0070f3; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    #status { color: green; margin-top: 8px; display: none; }
+  </style>
+</head>
+<body>
+  <h2>Threadline Options</h2>
+  <div class="field">
+    <label for="daemonUrl">Daemon URL</label>
+    <input type="text" id="daemonUrl" placeholder="http://127.0.0.1:47821">
+  </div>
+  <div class="field checkbox-row">
+    <input type="checkbox" id="enabled">
+    <label for="enabled">Enable tab tracking</label>
+  </div>
+  <div class="field checkbox-row">
+    <input type="checkbox" id="ignoreIncognito">
+    <label for="ignoreIncognito">Ignore incognito windows</label>
+  </div>
+  <button id="save">Save</button>
+  <div id="status">Settings saved.</div>
+  <script src="options.js" type="module"></script>
+</body>
+</html>

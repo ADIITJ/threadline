@@ -1,0 +1,37 @@
+{
+  "name": "threadline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first work-memory layer for AI agents",
+  "author": "Atharva Date <aashishdate@proliantdatallc.com>",
+  "license": "MIT",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "vitest run",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "package:skill": "node scripts/package-skill.mjs",
+    "package:extension": "node scripts/package-extension.mjs",
+    "verify": "node scripts/verify-no-placeholders.mjs",
+    "doctor": "node apps/mcp-server/dist/main.js --doctor 2>/dev/null || pnpm --filter @threadline/mcp-server exec node dist/main.js --doctor",
+    "clean": "turbo run clean && rm -rf dist",
+    "threadline": "node apps/installer/dist/cli.js"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "overrides": {},
+    "onlyBuiltDependencies": ["@biomejs/biome", "better-sqlite3", "esbuild"]
+  }
+}

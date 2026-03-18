@@ -1,0 +1,67 @@
+import type { ThreadlineEvent } from "../../../packages/common/src/index.js";
+
+// Scenario: User was in the middle of implementing a feature,
+// got interrupted, and now wants to resume.
+export const events: ThreadlineEvent[] = [
+  {
+    id: "ev1",
+    ts: 1700000000000,
+    source: "filesystem",
+    kind: "modified",
+    actor: "user",
+    title: "payment.service.ts",
+    text: "",
+    path: "/projects/payments/src/payment.service.ts",
+    repoPath: "/projects/payments",
+    tags: [],
+    entities: [],
+    metadata: {},
+  },
+  {
+    id: "ev2",
+    ts: 1700000060000,
+    source: "git",
+    kind: "branch_changed",
+    actor: "user",
+    title: "Branch changed: main → feat/stripe-integration",
+    text: "Repository: /projects/payments",
+    repoPath: "/projects/payments",
+    tags: [],
+    entities: [],
+    metadata: { from: "main", to: "feat/stripe-integration" },
+  },
+  {
+    id: "ev3",
+    ts: 1700000120000,
+    source: "browser",
+    kind: "tab_opened",
+    actor: "user",
+    title: "Stripe API Reference - PaymentIntents",
+    text: "",
+    url: "https://stripe.com/docs/api/payment_intents",
+    hostname: "stripe.com",
+    tags: [],
+    entities: [],
+    metadata: {},
+  },
+  {
+    id: "ev4",
+    ts: 1700000180000,
+    source: "checkpoint",
+    kind: "checkpoint_created",
+    actor: "user",
+    title: "Mid-feature checkpoint",
+    text: "Implemented create payment intent. TODO: handle webhook verification. I will add idempotency keys.",
+    repoPath: "/projects/payments",
+    tags: [],
+    entities: [],
+    metadata: {},
+  },
+];
+
+export const expectedContext = {
+  repo: "/projects/payments",
+  branch: "feat/stripe-integration",
+  hasCommitment: true,
+  commitmentKeyword: "webhook",
+};

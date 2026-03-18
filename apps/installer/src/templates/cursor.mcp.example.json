@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "threadline": {
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/.threadline/mcp-server/dist/main.js"]
+    }
+  }
+}

@@ -1,0 +1,42 @@
+name: threadline
+description: >
+  Threadline is a local-first work-memory layer for AI agents. It captures filesystem,
+  git, clipboard, and browser events, clusters them into resumable threads, and exposes
+  them through MCP tools. Use it to resume interrupted work, find buried commitments,
+  prepare handoffs, explain why files are open, and safely clean Downloads.
+version: 1.0.0
+author: Atharva Date
+license: MIT
+homepage: https://github.com/ADIITJ/threadline
+tags:
+  - productivity
+  - memory
+  - context
+  - local-first
+  - privacy
+mcp_tools:
+  - health
+  - list_recent_threads
+  - get_thread_details
+  - get_thread_timeline
+  - resume_last_thread
+  - search_threads
+  - find_commitments
+  - prepare_handoff
+  - safe_clean_downloads
+  - explain_why_open
+  - open_thread_artifacts
+  - capture_checkpoint
+  - archive_thread
+  - undo_last_cleanup
+capabilities:
+  - thread_clustering
+  - commitment_extraction
+  - safe_file_cleanup
+  - handoff_generation
+  - context_reconstruction
+privacy:
+  local_only: true
+  no_cloud_required: true
+  redacts_secrets: true
+  incognito_ignored: true

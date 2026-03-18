@@ -1,0 +1,20 @@
+{
+  "name": "@threadline/installer",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/cli.js",
+  "bin": {
+    "threadline": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@threadline/common": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
