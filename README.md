@@ -469,4 +469,4 @@ pnpm build && pnpm test && pnpm lint && pnpm verify
 
 ## License
 
-[MIT](LICENSE) © 2026 Aashish Date
+[MIT](LICENSE) © 2026 Atharva Date
