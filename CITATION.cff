@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use Threadline in your research, project, or product, please cite it as below."
+type: software
+title: "Threadline"
+abstract: "A local-first, passive work-memory layer for AI agents. Threadline observes filesystem activity, git commits, browser history, and clipboard to automatically reconstruct work sessions into threads, extract commitments, and surface context to AI agents via the Model Context Protocol (MCP)."
+version: 1.0.0
+date-released: "2026-03-19"
+license: MIT
+url: "https://github.com/ADIITJ/threadline"
+repository-code: "https://github.com/ADIITJ/threadline"
+keywords:
+  - ai-agents
+  - mcp
+  - model-context-protocol
+  - work-memory
+  - context-management
+  - local-first
+  - productivity
+  - claude
+  - cursor
+  - developer-tools
+authors:
+  - family-names: "Date"
+    given-names: "Atharva"
+    alias: "ADIITJ"
+    affiliation: "Indian Institute of Technology Jodhpur"
+    orcid: ""
