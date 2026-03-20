@@ -18,6 +18,7 @@ export type EventKind =
   | "tab_opened"
   | "tab_closed"
   | "tab_updated"
+  | "tab_visited"
   | "checkpoint_created"
   | "cleanup_moved"
   | "cleanup_restored"

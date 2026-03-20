@@ -15,6 +15,7 @@ export interface ThreadlineConfig {
   enableFilesystemWatcher: boolean;
   enableGitWatcher: boolean;
   enableActiveWindowWatcher: boolean;
+  enableBrowserHistoryWatcher: boolean;
   allowPaths: string[];
   denyPaths: string[];
   ignorePrivateBrowser: boolean;

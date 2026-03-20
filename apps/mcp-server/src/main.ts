@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { THREADLINE_VERSION } from "@threadline/common";
 import { ActiveWindowWatcher } from "./collectors/activeWindow.js";
+import { BrowserHistoryWatcher } from "./collectors/browserHistoryWatcher.js";
 import { ClipboardWatcher } from "./collectors/clipboardWatcher.js";
 import { FilesystemWatcher } from "./collectors/filesystemWatcher.js";
 import { GitWatcher } from "./collectors/gitWatcher.js";
@@ -47,13 +48,24 @@ async function runDoctor(config: ReturnType<typeof loadConfig>): Promise<void> {
     `Port ${config.daemonPort} available: ${portFree ? "yes" : "no (may already be running)"}`
   );
 
+  const bhWatcher = new BrowserHistoryWatcher();
   const collectors = [
     ["filesystem", config.enableFilesystemWatcher],
     ["clipboard", config.enableClipboardWatcher],
     ["git", config.enableGitWatcher],
-    ["browser", config.enableBrowserIngest],
+    ["browser_ingest", config.enableBrowserIngest],
+    ["browser_history", config.enableBrowserHistoryWatcher],
     ["active_window", config.enableActiveWindowWatcher],
   ];
+  if (config.enableBrowserHistoryWatcher) {
+    const detected = bhWatcher.detectedBrowsers();
+    if (detected.length > 0) {
+      collectors.push(["  detected browsers", true]);
+      for (const b of detected) {
+        console.log(`    · ${b}`);
+      }
+    }
+  }
   console.log("\nCollectors:");
   for (const [name, enabled] of collectors) {
     console.log(`  ${name}: ${enabled ? "enabled" : "disabled"}`);
@@ -97,6 +109,7 @@ async function main(): Promise<void> {
   const clipWatcher = new ClipboardWatcher(config.maxStoredClipboardChars);
   const gitWatcher = new GitWatcher();
   const awWatcher = new ActiveWindowWatcher();
+  const bhWatcher = new BrowserHistoryWatcher();
 
   const ingestEvent = async (event: import("@threadline/common").ThreadlineEvent) => {
     repos.events.insert(event);
@@ -114,6 +127,9 @@ async function main(): Promise<void> {
   }
   if (config.enableActiveWindowWatcher) {
     await awWatcher.start((ev) => void ingestEvent(ev));
+  }
+  if (config.enableBrowserHistoryWatcher) {
+    bhWatcher.start((ev) => void ingestEvent(ev));
   }
 
   // Start daemon
@@ -381,6 +397,7 @@ async function main(): Promise<void> {
     clipWatcher.stop();
     gitWatcher.stop();
     awWatcher.stop();
+    bhWatcher.stop();
     stopScheduler();
     await daemon.stop();
     await server.close();
