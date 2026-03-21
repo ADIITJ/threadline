@@ -22,7 +22,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-6366f1?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-43853d?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![MCP](https://img.shields.io/badge/MCP-14_Tools-7c3aed?style=for-the-badge)](https://modelcontextprotocol.io)
+[![MCP](https://img.shields.io/badge/MCP-15_Tools-7c3aed?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Tests](https://img.shields.io/badge/Tests-58_Passing-22c55e?style=for-the-badge)](tests/)
 [![Zero Cloud](https://img.shields.io/badge/Cloud-Zero-ef4444?style=for-the-badge)](#privacy)
 
@@ -113,32 +113,26 @@ Agent → prepare_handoff(threadId)
 
 ## How It Works
 
-Threadline runs a background daemon that observes your local environment across four signal sources, then uses a three-stage pipeline to reconstruct coherent work sessions.
+Threadline runs a background daemon that observes your local environment across eight signal sources, then uses a three-stage pipeline to reconstruct coherent work sessions.
 
 ```
   Signal sources                  Engine                    Output
 
   ┌──────────────┐                                        ┌──────────────┐
   │  Filesystem  │──┐                                     │   Threads    │
-  │  (chokidar)  │  │   ┌─────────────────────────────┐  │              │
-  └──────────────┘  │   │                             │  │  Timeline    │
-                    ├──▶│  1. Episode segmentation    │  │  of events   │
-  ┌──────────────┐  │   │     30-min gap = new episode│  └──────────────┘
-  │     Git      │  │   │                             │
-  │ (simple-git) │──┤   │  2. Signature extraction    │  ┌──────────────┐
-  └──────────────┘  │   │     tokenize paths, URLs,   │  │ Commitments  │
-                    │   │     repos → bag-of-words    │  │              │
-  ┌──────────────┐  │   │                             │  │  Extracted   │
-  │  Clipboard   │──┤   │  3. Jaccard clustering      │  │  from text   │
-  │  (pbpaste /  │  │   │     overlap score vs open   │  │  with dates  │
-  │   xclip)     │  │   │     thread signatures       │  └──────────────┘
-  └──────────────┘  │   │                             │
-                    │   └─────────────────────────────┘  ┌──────────────┐
-  ┌──────────────┐  │                                     │  Artifacts   │
-  │   Browser    │──┘                                     │              │
-  │  (MV3 ext)   │                                        │  Files, URLs │
-  └──────────────┘                                        │  linked to   │
-                                                          │  threads     │
+  │  Git         │  │   ┌─────────────────────────────┐  │  grouped by  │
+  │  Clipboard   │  │   │                             │  │  project     │
+  │  Active Win  │──┼──▶│  1. Episode segmentation    │  └──────────────┘
+  │  Browser     │  │   │     30-min gap = new episode│
+  │  history     │  │   │  2. Signature extraction    │  ┌──────────────┐
+  │  Claude      │  │   │     tokenize paths, URLs,   │  │ Commitments  │
+  │  sessions    │──┤   │     repos → bag-of-words    │  │  extracted   │
+  │  Beads       │  │   │  3. Jaccard clustering      │  │  with dates  │
+  │  memory      │  │   │     overlap score vs open   │  └──────────────┘
+  │  Claude      │  │   │     thread signatures       │
+  │  tasks/plans │──┘   │                             │  ┌──────────────┐
+                        └─────────────────────────────┘  │  Artifacts   │
+                                                          │  Files, URLs │
                                                           └──────────────┘
 ```
 
@@ -233,7 +227,7 @@ chmod +x scripts/install-local.sh && ./scripts/install-local.sh
 
 ## MCP Tools
 
-Threadline exposes 14 tools over the Model Context Protocol. All tools are available in tool-only mode — no resources or prompts required.
+Threadline exposes 15 tools over the Model Context Protocol. All tools are available in tool-only mode — no resources or prompts required.
 
 <details open>
 <summary><strong>Context & Resumption</strong></summary>
@@ -259,6 +253,7 @@ Threadline exposes 14 tools over the Model Context Protocol. All tools are avail
 | `list_recent_threads` | All threads sorted by last activity, with optional state filter |
 | `search_threads` | Full-text search across thread titles, summaries, and events |
 | `find_commitments` | Surface open or completed commitments, optionally filtered by thread |
+| `list_projects` | Group all threads by project/working directory with open commitment counts |
 
 </details>
 
@@ -355,6 +350,10 @@ Created at `~/.threadline/config.json` on first run. All fields are optional.
 | `ignorePrivateBrowser` | `true` | Discard events from incognito/private sessions |
 | `maxStoredClipboardChars` | `2000` | Clipboard text is truncated and redacted at this limit |
 | `logLevel` | `"info"` | Log verbosity: `"debug"`, `"info"`, `"warn"`, `"error"` |
+| `enableBrowserHistoryWatcher` | `true` | Read browser history SQLite files (Chrome/Brave/Firefox/Safari) |
+| `enableClaudeSessionWatcher` | `true` | Watch `~/.claude/projects/**/*.jsonl` for Claude Code session context |
+| `enableBeadsMemoryWatcher` | `true` | Watch `~/.claude/projects/*/memory/*.md` for Beads memory changes |
+| `enableClaudeTaskWatcher` | `true` | Poll `~/.claude/todos/` and `~/.claude/plans/` for task/plan changes |
 
 </details>
 
@@ -479,10 +478,11 @@ threadline/
 ├── apps/
 │   ├── mcp-server/          Core server
 │   │   ├── src/storage/     JsonStore, repositories, search index, audit log
-│   │   ├── src/collectors/  Filesystem, Git, Clipboard, Active window
+│   │   ├── src/collectors/  Filesystem, Git, Clipboard, Active window,
+│   │   │                    Browser history, Claude sessions/tasks/plans, Beads memory
 │   │   ├── src/daemon/      Fastify HTTP server, ingest routes, scheduler
 │   │   ├── src/engine/      Clustering, resume card, handoff, presence
-│   │   ├── src/tools/       14 MCP tool handlers
+│   │   ├── src/tools/       15 MCP tool handlers
 │   │   ├── src/security/    Secret redaction, path safety, permission guard
 │   │   └── src/main.ts      Entry point, tool registration, graceful shutdown
 │   │

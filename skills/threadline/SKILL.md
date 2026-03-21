@@ -21,12 +21,14 @@ tools:
   - capture_checkpoint
   - archive_thread
   - undo_last_cleanup
+  - list_projects
 ---
 
 # Threadline Skill
 
 Threadline is a local-first work-memory layer. It captures lightweight events from your
-filesystem, git repos, clipboard, and browser tabs, clusters them into resumable threads,
+filesystem, git repos, clipboard, browser history, Claude Code sessions, Beads memory
+files, and task/plan files, clusters them into resumable threads grouped by project,
 and exposes them through MCP tools.
 
 **Primary mode: fully inside Claude Code.** Use these tools directly. No external UI needed.
@@ -46,6 +48,7 @@ Trigger this skill when the user says or implies:
 - "prepare handoff", "summarize my work"
 - "clean downloads", "safe cleanup"
 - "checkpoint", "save my progress"
+- "show projects", "list projects", "what projects", "group by project"
 
 ---
 
@@ -96,6 +99,12 @@ prepare_handoff(threadId?) OR prepare_handoff(query="<keyword>")
 safe_clean_downloads(dryRun=true) → show preview
 safe_clean_downloads(dryRun=false) → perform cleanup, show manifest
 undo_last_cleanup() → restore files
+```
+
+### Projects
+
+```
+list_projects() → show all projects with thread counts and open commitments
 ```
 
 ### Checkpoints

@@ -39,6 +39,25 @@ call `capture_checkpoint` with a title and any notes they provide.
 When the user says "I need to hand this off" or "help me document my progress",
 call `list_recent_threads` to identify the thread, then `prepare_handoff`.
 
+## Project Overview
+
+When the user says "show my projects", "what am I working on across repos",
+or "group by project", call `list_projects` to show thread counts, active
+threads, and open commitments per project.
+
+## Automatic Context Sources
+
+Threadline ingests context automatically from:
+- **Filesystem & Git** — file changes, commits, branch switches
+- **Clipboard** — copied text (secrets redacted, capped at 2000 chars)
+- **Browser history** — Chrome, Brave, Firefox, Safari history databases
+- **Claude Code sessions** — JSONL session files, project + branch context
+- **Beads memory** — `~/.claude/projects/*/memory/*.md` on change
+- **Claude tasks/plans** — `~/.claude/todos/` and `~/.claude/plans/` every 30s
+
+No configuration required. All sources are enabled by default and can be
+disabled individually in `~/.threadline/config.json`.
+
 ## Tool Reference
 
 See `examples/AGENTS.md` for the full tool table and calling patterns.
