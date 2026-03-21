@@ -3,9 +3,10 @@ name: threadline
 description: >
   Use when the user wants to resume interrupted work, reconstruct context, find buried
   commitments, explain why a file or tab is still open, prepare a handoff, safely clean
-  Downloads, list or inspect threads, show activity history, or search past work sessions.
+  Downloads, list or inspect threads, show activity history, search past work sessions,
+  split or merge threads, export/import threads for sharing, or search raw events.
   Requires a running Threadline MCP server.
-version: 1.0.0
+version: 1.1.0
 tools:
   - health
   - list_recent_threads
@@ -13,7 +14,9 @@ tools:
   - get_thread_timeline
   - resume_last_thread
   - search_threads
+  - search_events
   - find_commitments
+  - list_projects
   - prepare_handoff
   - safe_clean_downloads
   - explain_why_open
@@ -21,7 +24,10 @@ tools:
   - capture_checkpoint
   - archive_thread
   - undo_last_cleanup
-  - list_projects
+  - split_thread
+  - merge_threads
+  - export_thread
+  - import_thread
 ---
 
 # Threadline Skill
@@ -44,11 +50,14 @@ Trigger this skill when the user says or implies:
 - "show threads", "show history", "show recent work"
 - "open this thread", "what is this file about"
 - "why is this tab open", "explain this file"
-- "find my commitments", "what did I promise"
+- "find my commitments", "what did I promise", "what's due today"
 - "prepare handoff", "summarize my work"
 - "clean downloads", "safe cleanup"
 - "checkpoint", "save my progress"
 - "show projects", "list projects", "what projects", "group by project"
+- "search events", "show raw events", "what happened on", "show git commits"
+- "split thread", "merge threads", "combine these threads"
+- "export thread", "share this thread", "import thread"
 
 ---
 
@@ -76,6 +85,7 @@ resume_last_thread() OR resume_last_thread(query="<keyword>")
 ```
 search_threads(query="<keyword>") → show matches
 find_commitments(query="<keyword>") → show commitments
+search_events(source="git", kind="commit", from="2026-03-01") → show raw events
 ```
 
 ### Explaining presence of a file or URL
@@ -111,6 +121,27 @@ list_projects() → show all projects with thread counts and open commitments
 
 ```
 capture_checkpoint(title="...", note="...") → save checkpoint, extract commitments
+```
+
+### Thread management
+
+```
+# Split: first show timeline, then split selected events
+get_thread_timeline(threadId) → show events to user
+split_thread(threadId, eventIds=[...]) → create new thread from events
+
+# Merge two threads into one
+merge_threads(targetThreadId, sourceThreadId) → source archived, target updated
+
+# Export / import for sharing or backup
+export_thread(threadId) → returns JSON string
+import_thread(data="<json>") → creates [imported] thread copy
+```
+
+### Health and alerts
+
+```
+health() → daemon status, per-collector stats, overdue commitment alerts
 ```
 
 ---
@@ -196,6 +227,23 @@ Files can be restored with `undo_last_cleanup()`.
 - [ ] Follow up with vendor about dispute
 ```
 
+### Health response
+
+```
+## Threadline Health
+
+Status: ok | Version: 1.0.0 | Schema: v3
+
+Collectors:
+- filesystem   ✓ enabled | 128 events | last: 2m ago
+- git          ✓ enabled | 44 events  | last: 5m ago
+- clipboard    ✓ enabled | 12 events  | last: 1h ago
+- browser_ext  ✓ enabled | 87 events  | last: 3m ago
+
+Alerts:
+- [ ] Send invoice to accounting — due today
+```
+
 ---
 
 ## Privacy notes
@@ -210,5 +258,5 @@ Files can be restored with `undo_last_cleanup()`.
 ## Prefer in-Claude workflow
 
 When the user asks about threads, history, or context — use the MCP tools and render
-the output directly in the conversation. Only suggest an optional local viewer if one
-is available and the user explicitly asks for a visual interface.
+the output directly in the conversation. Only mention the local web UI at
+`http://127.0.0.1:47821/ui` if the user explicitly asks for a visual overview.

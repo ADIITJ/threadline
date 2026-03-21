@@ -29,7 +29,7 @@ is available through tools alone — no resources or prompts are required.
 ## Tools-only mode
 
 Some hosts (particularly OpenAI-compatible agents) support only MCP tools, not resources
-or prompts. Threadline is fully functional in tools-only mode — all 14 tools return
+or prompts. Threadline is fully functional in tools-only mode — all 20 tools return
 complete, formatted data through the tool response.
 
 ## Browser extension

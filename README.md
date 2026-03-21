@@ -22,7 +22,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-6366f1?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-20%2B-43853d?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![MCP](https://img.shields.io/badge/MCP-15_Tools-7c3aed?style=for-the-badge)](https://modelcontextprotocol.io)
+[![MCP](https://img.shields.io/badge/MCP-20_Tools-7c3aed?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Tests](https://img.shields.io/badge/Tests-58_Passing-22c55e?style=for-the-badge)](tests/)
 [![Zero Cloud](https://img.shields.io/badge/Cloud-Zero-ef4444?style=for-the-badge)](#privacy)
 
@@ -194,6 +194,12 @@ node apps/installer/dist/cli.js install --host claude-desktop
 node apps/installer/dist/cli.js install --host cursor
 node apps/installer/dist/cli.js install --host vscode
 node apps/installer/dist/cli.js install --host codex
+
+# Print config without writing (copy-paste into your editor)
+node apps/installer/dist/cli.js install --host claude-code --print
+
+# Generate a natural-language setup prompt for Claude / Codex / Copilot
+node apps/installer/dist/cli.js prompt --host claude-code
 ```
 
 ### Verify
@@ -227,7 +233,7 @@ chmod +x scripts/install-local.sh && ./scripts/install-local.sh
 
 ## MCP Tools
 
-Threadline exposes 15 tools over the Model Context Protocol. All tools are available in tool-only mode — no resources or prompts required.
+Threadline exposes 20 tools over the Model Context Protocol. All tools are available in tool-only mode — no resources or prompts required.
 
 <details open>
 <summary><strong>Context & Resumption</strong></summary>
@@ -252,8 +258,23 @@ Threadline exposes 15 tools over the Model Context Protocol. All tools are avail
 |------|-------------|
 | `list_recent_threads` | All threads sorted by last activity, with optional state filter |
 | `search_threads` | Full-text search across thread titles, summaries, and events |
+| `search_events` | Filter raw events by source, kind, thread, date range, or text query |
 | `find_commitments` | Surface open or completed commitments, optionally filtered by thread |
 | `list_projects` | Group all threads by project/working directory with open commitment counts |
+
+</details>
+
+<details>
+<summary><strong>Thread Management</strong></summary>
+
+<br />
+
+| Tool | Description |
+|------|-------------|
+| `split_thread` | Split selected events from a thread into a new standalone thread |
+| `merge_threads` | Merge a source thread into a target — reassigns events, artifacts, and commitments |
+| `export_thread` | Serialize a thread to portable JSON for backup or team sharing |
+| `import_thread` | Import a previously exported thread JSON, remapping all IDs to avoid conflicts |
 
 </details>
 
@@ -280,7 +301,7 @@ Threadline exposes 15 tools over the Model Context Protocol. All tools are avail
 |------|-------------|
 | `safe_clean_downloads` | Preview or execute Downloads folder cleanup — dry-run by default, all moves reversible |
 | `undo_last_cleanup` | Restore the most recent cleanup manifest to original paths |
-| `health` | Daemon status, active collectors, thread and event counts |
+| `health` | Daemon status, per-collector stats, due-today commitment alerts, schema version |
 
 </details>
 
@@ -354,6 +375,7 @@ Created at `~/.threadline/config.json` on first run. All fields are optional.
 | `enableClaudeSessionWatcher` | `true` | Watch `~/.claude/projects/**/*.jsonl` for Claude Code session context |
 | `enableBeadsMemoryWatcher` | `true` | Watch `~/.claude/projects/*/memory/*.md` for Beads memory changes |
 | `enableClaudeTaskWatcher` | `true` | Poll `~/.claude/todos/` and `~/.claude/plans/` for task/plan changes |
+| `enableBrowserIngest` | `true` | Accept events from the browser extension at `/ingest/browser-event` |
 
 </details>
 
@@ -455,6 +477,42 @@ pnpm build
 
 The extension never communicates with any server outside your machine. It only POSTs to `http://127.0.0.1:47821/ingest/browser-event`.
 
+A Chrome Alarms keep-alive pings the daemon every 24 seconds so the MV3 service worker never goes idle.
+
+<br />
+
+---
+
+## Local Web UI
+
+A lightweight status dashboard is served at `http://127.0.0.1:47821/ui` while the daemon is running.
+
+- Live health check and version info
+- Recent threads with last-active timestamps
+- Auto-refreshes every 30 seconds
+- No build step — single self-contained HTML file
+
+<br />
+
+---
+
+## Team / Shared Mode
+
+Thread context can be exported and imported across machines:
+
+```bash
+# Export a thread to JSON (via MCP or HTTP)
+export_thread(threadId="...")        # returns portable JSON string
+
+# Import on another machine
+import_thread(data="<json string>")  # remaps all IDs, prefixes title with [imported]
+
+# Or POST directly to the daemon
+curl -X POST http://127.0.0.1:47821/api/import-thread \
+  -H "Content-Type: application/json" \
+  -d '{"data": "<json string>"}'
+```
+
 <br />
 
 ---
@@ -477,14 +535,16 @@ threadline/
 │
 ├── apps/
 │   ├── mcp-server/          Core server
-│   │   ├── src/storage/     JsonStore, repositories, search index, audit log
+│   │   ├── src/storage/     IStore interface, JsonStore, repositories, migrations,
+│   │   │                    search index, audit log, collector stats registry
 │   │   ├── src/collectors/  Filesystem, Git, Clipboard, Active window,
 │   │   │                    Browser history, Claude sessions/tasks/plans, Beads memory
-│   │   ├── src/daemon/      Fastify HTTP server, ingest routes, scheduler
+│   │   ├── src/daemon/      Fastify HTTP server (/ui + /api/import-thread),
+│   │   │                    ingest routes, scheduler (commitment alerts + auto-close)
 │   │   ├── src/engine/      Clustering, resume card, handoff, presence
-│   │   ├── src/tools/       15 MCP tool handlers
+│   │   ├── src/tools/       20 MCP tool handlers
 │   │   ├── src/security/    Secret redaction, path safety, permission guard
-│   │   └── src/main.ts      Entry point, tool registration, graceful shutdown
+│   │   └── src/main.ts      Entry point, batched ingest, tool registration, shutdown
 │   │
 │   ├── browser-extension/   Chrome MV3
 │   │   └── src/             background.ts, options, popup, manifest.json
@@ -547,12 +607,18 @@ Duration     ~2s
 
 ## Roadmap
 
+- [x] Thread export/import for team sharing
+- [x] Local web UI dashboard at `/ui`
+- [x] Per-collector health stats in `health` tool
+- [x] Proactive commitment due-date alerts
+- [x] Ingest rate limiting (2-second batch queue)
+- [x] Storage abstraction layer (IStore) for future SQLite swap
 - [ ] VS Code sidebar panel for thread browsing
-- [ ] Webhook support for team-shared thread summaries
 - [ ] Firefox extension (MV3)
 - [ ] Linear / GitHub Issues commitment sync
 - [ ] Configurable clustering threshold per project
-- [ ] Export threads to Markdown / Obsidian
+- [ ] SQLite backend (drop-in via `SqliteStore implements IStore`)
+- [ ] Webhook push for team thread summaries
 
 <br />
 

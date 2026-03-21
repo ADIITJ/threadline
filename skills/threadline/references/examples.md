@@ -89,3 +89,57 @@ Key artifacts:
 1. Prompts for a title if not given
 2. Calls `capture_checkpoint(title="...", note="...")`
 3. Reports checkpoint saved and any commitments extracted
+
+---
+
+## Search raw events
+
+**User:** Show me all git commits from last week
+
+**Assistant:**
+1. Calls `search_events(source="git", kind="commit", from="2026-03-14", to="2026-03-21")`
+2. Shows formatted event list grouped by thread
+
+---
+
+## Split a thread
+
+**User:** This thread has both auth work and the billing refactor — split them
+
+**Assistant:**
+1. Calls `get_thread_timeline(threadId="...")` to show the event list
+2. User identifies event IDs belonging to billing
+3. Calls `split_thread(threadId="...", eventIds=[...])`
+4. Reports new thread created and original thread updated
+
+---
+
+## Merge threads
+
+**User:** These two oauth threads are the same work, merge them
+
+**Assistant:**
+1. Calls `list_recent_threads()` to confirm the two thread IDs
+2. Calls `merge_threads(targetThreadId="...", sourceThreadId="...")`
+3. Reports merged event count; source thread is archived
+
+---
+
+## Export and share a thread
+
+**User:** Send this thread context to my teammate
+
+**Assistant:**
+1. Calls `export_thread(threadId="...")`
+2. Returns the JSON string to the user to share
+3. Teammate calls `import_thread(data="<json>")` on their machine
+
+---
+
+## Check health and alerts
+
+**User:** Is Threadline running? Any commitments due today?
+
+**Assistant:**
+1. Calls `health()`
+2. Shows daemon status, per-collector event counts, and any due-today alerts
