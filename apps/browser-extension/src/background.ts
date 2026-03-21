@@ -83,3 +83,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.tabs.onUpdated.addListener(() => {
   chrome.storage.local.set({ lastEventTs: Date.now() });
 });
+
+// Keep-alive alarm (Issue 7): MV3 service workers go inactive after 30s.
+// A repeating alarm pings the daemon every 25s to keep the worker alive.
+chrome.alarms.create("keepAlive", { periodInMinutes: 0.4 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== "keepAlive") return;
+  getSettings().then((s) => {
+    fetch(`${s.daemonUrl}/health`, { signal: AbortSignal.timeout(3000) }).catch(() => {});
+  });
+});

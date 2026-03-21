@@ -7,7 +7,7 @@
     "threadline-server": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp src/daemon/ui.html dist/daemon/ui.html",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "echo 'Tests run from root workspace'",
     "clean": "rm -rf dist"

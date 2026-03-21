@@ -1,14 +1,17 @@
 import { join } from "node:path";
 import { logger } from "../logger.js";
+import type { IStore } from "./iStore.js";
 import { JsonStore } from "./jsonStore.js";
+import { runMigrations } from "./migrations.js";
 
-let _store: JsonStore | null = null;
+let _store: IStore | null = null;
 
-export function getDb(homeDir: string): JsonStore {
+export function getDb(homeDir: string): IStore {
   if (_store) return _store;
   const dbPath = join(homeDir, "data", "threadline.json");
   _store = new JsonStore(dbPath);
-  logger.info("JSON store initialized", { path: dbPath });
+  runMigrations(_store);
+  logger.info("Store initialized", { path: dbPath });
   return _store;
 }
 

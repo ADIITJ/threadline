@@ -1,5 +1,5 @@
 import type { Artifact } from "@threadline/common";
-import type { JsonStore } from "../jsonStore.js";
+import type { IStore } from "../iStore.js";
 
 const TABLE = "artifacts";
 const LINK_TABLE = "thread_artifacts";
@@ -10,7 +10,7 @@ interface ThreadArtifactLink {
 }
 
 export class ArtifactsRepo {
-  constructor(private store: JsonStore) {}
+  constructor(private store: IStore) {}
 
   upsert(artifact: Artifact): void {
     this.store.upsert(TABLE, artifact as unknown as Record<string, unknown>, "id");
@@ -51,6 +51,18 @@ export class ArtifactsRepo {
     if (!exists) {
       this.store.insert(LINK_TABLE, { thread_id: threadId, artifact_id: artifactId });
     }
+  }
+
+  unlinkFromThread(threadId: string): void {
+    this.store.deleteWhere(LINK_TABLE, (r) => r.thread_id === threadId);
+  }
+
+  relinkToThread(fromThreadId: string, toThreadId: string): void {
+    this.store.updateWhere(
+      LINK_TABLE,
+      (r) => r.thread_id === fromThreadId,
+      (r) => ({ ...r, thread_id: toThreadId })
+    );
   }
 
   countByThread(threadId: string): number {

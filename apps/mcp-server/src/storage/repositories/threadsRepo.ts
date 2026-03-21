@@ -1,10 +1,10 @@
 import type { Thread } from "@threadline/common";
-import type { JsonStore } from "../jsonStore.js";
+import type { IStore } from "../iStore.js";
 
 const TABLE = "threads";
 
 export class ThreadsRepo {
-  constructor(private store: JsonStore) {}
+  constructor(private store: IStore) {}
 
   upsert(thread: Thread): void {
     this.store.upsert(TABLE, thread as unknown as Record<string, unknown>, "id");

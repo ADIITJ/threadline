@@ -1,10 +1,10 @@
 import type { Checkpoint } from "@threadline/common";
-import type { JsonStore } from "../jsonStore.js";
+import type { IStore } from "../iStore.js";
 
 const TABLE = "checkpoints";
 
 export class CheckpointsRepo {
-  constructor(private store: JsonStore) {}
+  constructor(private store: IStore) {}
 
   insert(cp: Checkpoint): void {
     this.store.insertUnique(TABLE, cp as unknown as Record<string, unknown>, "id");

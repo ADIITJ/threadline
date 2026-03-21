@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Threadline</title>
+<style>
+  :root { --bg: #0f0f13; --surface: #1a1a22; --border: #2a2a38; --text: #e2e2f0; --muted: #888; --accent: #7c3aed; --green: #22c55e; --yellow: #eab308; --red: #ef4444; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 'SF Mono', monospace; padding: 24px; }
+  h1 { font-size: 18px; color: var(--accent); margin-bottom: 8px; }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: .08em; margin-bottom: 12px; }
+  .stat { font-size: 28px; font-weight: bold; }
+  .thread-list { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .thread-list h2 { font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: .08em; margin-bottom: 12px; }
+  .thread { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .thread:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.active { background: var(--green); }
+  .dot.stale { background: var(--yellow); }
+  .dot.waiting { background: var(--accent); }
+  .dot.archived { background: var(--muted); }
+  .thread-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .thread-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .alert { background: #2a1515; border: 1px solid var(--red); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #fca5a5; font-size: 13px; }
+  .alert strong { color: var(--red); }
+  #error { color: var(--red); padding: 16px; }
+</style>
+</head>
+<body>
+<h1>⬡ Threadline</h1>
+<div class="meta" id="meta">Loading…</div>
+<div id="alerts"></div>
+<div class="grid" id="stats"></div>
+<div class="thread-list">
+  <h2>Recent Threads</h2>
+  <div id="threads">Loading…</div>
+</div>
+<script>
+const API = '';
+async function load() {
+  try {
+    const [health, threadsRes] = await Promise.all([
+      fetch(API + '/health').then(r => r.json()),
+      fetch(API + '/threads/recent?limit=20').then(r => r.json()),
+    ]);
+
+    document.getElementById('meta').textContent =
+      `v${health.version} · refreshed ${new Date().toLocaleTimeString()}`;
+
+    // Alerts
+    const alertsEl = document.getElementById('alerts');
+    alertsEl.innerHTML = '';
+
+    // Stats (from /api/health-full if available, else basic)
+    document.getElementById('stats').innerHTML = '';
+
+    // Threads
+    const threads = threadsRes.threads ?? [];
+    const el = document.getElementById('threads');
+    if (!threads.length) { el.textContent = 'No threads yet.'; return; }
+    el.innerHTML = threads.map(t => `
+      <div class="thread">
+        <span class="dot ${t.state ?? 'stale'}"></span>
+        <span class="thread-title" title="${esc(t.title)}">${esc(t.title)}</span>
+        <span class="thread-meta">${esc(t.state)}</span>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('threads').innerHTML = '<div id="error">Cannot reach Threadline daemon. Is it running?</div>';
+  }
+}
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

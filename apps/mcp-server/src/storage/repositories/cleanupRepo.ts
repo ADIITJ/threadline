@@ -1,10 +1,10 @@
 import type { CleanupManifest } from "@threadline/common";
-import type { JsonStore } from "../jsonStore.js";
+import type { IStore } from "../iStore.js";
 
 const TABLE = "cleanup_manifests";
 
 export class CleanupRepo {
-  constructor(private store: JsonStore) {}
+  constructor(private store: IStore) {}
 
   insert(manifest: CleanupManifest): void {
     this.store.insertUnique(TABLE, manifest as unknown as Record<string, unknown>, "id");

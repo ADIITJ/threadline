@@ -2,6 +2,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { ThreadlineEvent } from "@threadline/common";
 import { THREADLINE_VERSION } from "@threadline/common";
 import { ActiveWindowWatcher } from "./collectors/activeWindow.js";
 import { BeadsMemoryWatcher } from "./collectors/beadsMemoryWatcher.js";
@@ -12,11 +13,12 @@ import { ClipboardWatcher } from "./collectors/clipboardWatcher.js";
 import { FilesystemWatcher } from "./collectors/filesystemWatcher.js";
 import { GitWatcher } from "./collectors/gitWatcher.js";
 import { ensureHomeDirs, loadConfig } from "./config.js";
-import { startScheduler } from "./daemon/scheduler.js";
+import { autoCloseMatchingCommitments, startScheduler } from "./daemon/scheduler.js";
 import { startDaemon } from "./daemon/server.js";
 import { clusterNewEvents } from "./engine/clusterThreads.js";
 import { logger } from "./logger.js";
 import { initAuditLog } from "./storage/auditLog.js";
+import * as registry from "./storage/collectorRegistry.js";
 import { closeDb, getDb } from "./storage/db.js";
 import { ArtifactsRepo } from "./storage/repositories/artifactsRepo.js";
 import { CheckpointsRepo } from "./storage/repositories/checkpointsRepo.js";
@@ -28,17 +30,22 @@ import { globalSearchIndex } from "./storage/searchIndex.js";
 import { toolArchiveThread } from "./tools/archiveThread.js";
 import { toolCaptureCheckpoint } from "./tools/captureCheckpoint.js";
 import { toolExplainWhyOpen } from "./tools/explainWhyOpen.js";
+import { toolExportThread } from "./tools/exportThread.js";
 import { toolFindCommitments } from "./tools/findCommitments.js";
 import { toolGetThreadDetails } from "./tools/getThreadDetails.js";
 import { toolGetThreadTimeline } from "./tools/getThreadTimeline.js";
 import { toolHealth } from "./tools/health.js";
+import { toolImportThread } from "./tools/importThread.js";
 import { toolListProjects } from "./tools/listProjects.js";
 import { toolListRecentThreads } from "./tools/listRecentThreads.js";
+import { toolMergeThreads } from "./tools/mergeThreads.js";
 import { toolOpenThreadArtifacts } from "./tools/openThreadArtifacts.js";
 import { toolPrepareHandoff } from "./tools/prepareHandoff.js";
 import { toolResumeLastThread } from "./tools/resumeLastThread.js";
 import { toolSafeCleanDownloads } from "./tools/safeCleanDownloads.js";
+import { toolSearchEvents } from "./tools/searchEvents.js";
 import { toolSearchThreads } from "./tools/searchThreads.js";
+import { toolSplitThread } from "./tools/splitThread.js";
 import { toolUndoLastCleanup } from "./tools/undoLastCleanup.js";
 
 async function runDoctor(config: ReturnType<typeof loadConfig>): Promise<void> {
@@ -46,6 +53,7 @@ async function runDoctor(config: ReturnType<typeof loadConfig>): Promise<void> {
   console.log("=== Threadline Doctor ===\n");
   console.log(`Home dir: ${config.homeDir}`);
   console.log(`Daemon port: ${config.daemonPort}`);
+  console.log(`Web UI: http://127.0.0.1:${config.daemonPort}/ui`);
 
   const portFree = await isPortAvailable(config.daemonPort);
   console.log(
@@ -66,12 +74,7 @@ async function runDoctor(config: ReturnType<typeof loadConfig>): Promise<void> {
   ];
   if (config.enableBrowserHistoryWatcher) {
     const detected = bhWatcher.detectedBrowsers();
-    if (detected.length > 0) {
-      collectors.push(["  detected browsers", true]);
-      for (const b of detected) {
-        console.log(`    · ${b}`);
-      }
-    }
+    for (const b of detected) console.log(`    · ${b}`);
   }
   console.log("\nCollectors:");
   for (const [name, enabled] of collectors) {
@@ -106,10 +109,94 @@ async function main(): Promise<void> {
   };
 
   // Bootstrap search index from existing threads
-  const existingThreads = repos.threads.findAll(1000);
-  for (const t of existingThreads) {
+  for (const t of repos.threads.findAll(1000)) {
     globalSearchIndex.add(t.id, [t.title, t.summary, t.signature, ...t.entityBag]);
   }
+
+  // ── Ingest pipeline ──────────────────────────────────────────────────────
+  // Issue 15: Batch events in a 2s window before clustering to reduce CPU spikes.
+  // Issue 9:  Enrich clipboard events with last known active window context.
+  let lastWindowEvent: ThreadlineEvent | null = null;
+  const eventQueue: ThreadlineEvent[] = [];
+  let batchTimer: NodeJS.Timeout | null = null;
+
+  const flushBatch = async () => {
+    if (eventQueue.length === 0) return;
+    const batch = eventQueue.splice(0);
+    for (const ev of batch) {
+      // Issue 2: Deduplicated insert for browser/clipboard events
+      const useDedup =
+        ev.source === "browser" ||
+        ev.source === "clipboard" ||
+        ev.source === "beads_memory" ||
+        ev.source === "claude_session";
+      if (useDedup) {
+        repos.events.insertDeduped(ev);
+      } else {
+        repos.events.insert(ev);
+      }
+    }
+    await clusterNewEvents(batch, repos.events, repos.threads, repos.artifacts);
+
+    // Issue 5: Auto-close commitments that match a git commit message
+    for (const ev of batch) {
+      if (ev.kind === "committed") {
+        const threadMatch = repos.threads.findBySignatureTokens(
+          ev.title
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((w) => w.length > 3),
+          3
+        );
+        const threadId = threadMatch[0]?.id ?? null;
+        const closed = autoCloseMatchingCommitments(ev.title, threadId, repos);
+        if (closed > 0) logger.info(`Auto-closed ${closed} commitment(s) via git commit`);
+      }
+    }
+  };
+
+  const ingestEvent = (rawEvent: ThreadlineEvent): void => {
+    // Issue 9: Clipboard-window correlation — attach active window context
+    let event = rawEvent;
+    if (event.source === "clipboard" && lastWindowEvent) {
+      const lag = event.ts - lastWindowEvent.ts;
+      if (lag < 5000) {
+        event = {
+          ...event,
+          metadata: {
+            ...event.metadata,
+            activeApp: lastWindowEvent.metadata?.appName,
+            activeWindow: lastWindowEvent.title,
+          },
+        };
+      }
+    }
+    if (event.source === "active_window") {
+      lastWindowEvent = event;
+    }
+
+    // Register collector event
+    registry.recordEvent(event.source, {});
+
+    eventQueue.push(event);
+    if (!batchTimer) {
+      batchTimer = setTimeout(() => {
+        batchTimer = null;
+        void flushBatch();
+      }, 2000);
+    }
+  };
+
+  // Register collectors in registry
+  registry.registerCollector("filesystem", config.enableFilesystemWatcher);
+  registry.registerCollector("clipboard", config.enableClipboardWatcher);
+  registry.registerCollector("git", config.enableGitWatcher);
+  registry.registerCollector("active_window", config.enableActiveWindowWatcher);
+  registry.registerCollector("browser_history", config.enableBrowserHistoryWatcher);
+  registry.registerCollector("browser_ingest", config.enableBrowserIngest);
+  registry.registerCollector("claude_session", config.enableClaudeSessionWatcher);
+  registry.registerCollector("beads_memory", config.enableBeadsMemoryWatcher);
+  registry.registerCollector("claude_task", config.enableClaudeTaskWatcher);
 
   // Start collectors
   const fsWatcher = new FilesystemWatcher();
@@ -121,41 +208,18 @@ async function main(): Promise<void> {
   const bmWatcher = new BeadsMemoryWatcher();
   const ctWatcher = new ClaudeTaskWatcher();
 
-  const ingestEvent = async (event: import("@threadline/common").ThreadlineEvent) => {
-    repos.events.insert(event);
-    await clusterNewEvents([event], repos.events, repos.threads, repos.artifacts);
-  };
+  if (config.enableFilesystemWatcher) fsWatcher.start(config.allowPaths, ingestEvent);
+  if (config.enableClipboardWatcher) clipWatcher.start(ingestEvent);
+  if (config.enableGitWatcher) gitWatcher.start(config.allowPaths, ingestEvent);
+  if (config.enableActiveWindowWatcher) await awWatcher.start(ingestEvent);
+  if (config.enableBrowserHistoryWatcher) bhWatcher.start(ingestEvent);
+  if (config.enableClaudeSessionWatcher) csWatcher.start(ingestEvent);
+  if (config.enableBeadsMemoryWatcher) bmWatcher.start(ingestEvent);
+  if (config.enableClaudeTaskWatcher) ctWatcher.start(ingestEvent);
 
-  if (config.enableFilesystemWatcher) {
-    fsWatcher.start(config.allowPaths, (ev) => void ingestEvent(ev));
-  }
-  if (config.enableClipboardWatcher) {
-    clipWatcher.start((ev) => void ingestEvent(ev));
-  }
-  if (config.enableGitWatcher) {
-    gitWatcher.start(config.allowPaths, (ev) => void ingestEvent(ev));
-  }
-  if (config.enableActiveWindowWatcher) {
-    await awWatcher.start((ev) => void ingestEvent(ev));
-  }
-  if (config.enableBrowserHistoryWatcher) {
-    bhWatcher.start((ev) => void ingestEvent(ev));
-  }
-  if (config.enableClaudeSessionWatcher) {
-    csWatcher.start((ev) => void ingestEvent(ev));
-  }
-  if (config.enableBeadsMemoryWatcher) {
-    bmWatcher.start((ev) => void ingestEvent(ev));
-  }
-  if (config.enableClaudeTaskWatcher) {
-    ctWatcher.start((ev) => void ingestEvent(ev));
-  }
-
-  // Start daemon
   const daemon = await startDaemon(config, repos);
   const stopScheduler = startScheduler(repos);
 
-  // Build MCP server
   const server = new Server(
     { name: "threadline", version: THREADLINE_VERSION },
     { capabilities: { tools: {} } }
@@ -165,7 +229,7 @@ async function main(): Promise<void> {
     tools: [
       {
         name: "health",
-        description: "Check Threadline daemon health, version, and enabled collectors",
+        description: "Check Threadline health, version, per-collector stats, and due-date alerts",
         inputSchema: { type: "object", properties: {}, required: [] },
       },
       {
@@ -175,7 +239,7 @@ async function main(): Promise<void> {
         inputSchema: {
           type: "object",
           properties: {
-            limit: { type: "number", description: "Max threads to return (default 20)" },
+            limit: { type: "number" },
             state: { type: "string", enum: ["active", "waiting", "blocked", "stale", "archived"] },
           },
         },
@@ -201,10 +265,7 @@ async function main(): Promise<void> {
         description: "Get the event timeline for a thread",
         inputSchema: {
           type: "object",
-          properties: {
-            threadId: { type: "string" },
-            limit: { type: "number" },
-          },
+          properties: { threadId: { type: "string" }, limit: { type: "number" } },
           required: ["threadId"],
         },
       },
@@ -232,6 +293,22 @@ async function main(): Promise<void> {
             limit: { type: "number" },
           },
           required: ["query"],
+        },
+      },
+      {
+        name: "search_events",
+        description: "Search raw events by keyword, source, kind, or date range",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: { type: "string" },
+            source: { type: "string" },
+            kind: { type: "string" },
+            threadId: { type: "string" },
+            sinceTs: { type: "number" },
+            untilTs: { type: "number" },
+            limit: { type: "number" },
+          },
         },
       },
       {
@@ -269,7 +346,7 @@ async function main(): Promise<void> {
         inputSchema: {
           type: "object",
           properties: {
-            dryRun: { type: "boolean", description: "Default true — preview only" },
+            dryRun: { type: "boolean" },
             limit: { type: "number" },
             olderThanDays: { type: "number" },
             strategy: { type: "string", enum: ["by_thread", "by_extension", "by_age"] },
@@ -294,10 +371,7 @@ async function main(): Promise<void> {
         description: "Open files and URLs associated with a thread using system default apps",
         inputSchema: {
           type: "object",
-          properties: {
-            threadId: { type: "string" },
-            limit: { type: "number" },
-          },
+          properties: { threadId: { type: "string" }, limit: { type: "number" } },
           required: ["threadId"],
         },
       },
@@ -334,8 +408,53 @@ async function main(): Promise<void> {
       {
         name: "list_projects",
         description:
-          "List all detected projects with their threads, active status, and open commitments. Projects are grouped by working directory and git repo.",
+          "List all detected projects with their threads, active status, and open commitments",
         inputSchema: { type: "object", properties: {}, required: [] },
+      },
+      {
+        name: "split_thread",
+        description: "Split selected events out of a thread into a new thread",
+        inputSchema: {
+          type: "object",
+          properties: {
+            threadId: { type: "string" },
+            eventIds: { type: "array", items: { type: "string" } },
+          },
+          required: ["threadId", "eventIds"],
+        },
+      },
+      {
+        name: "merge_threads",
+        description:
+          "Merge two threads — moves all events, artifacts, and commitments from source into target",
+        inputSchema: {
+          type: "object",
+          properties: {
+            targetThreadId: { type: "string" },
+            sourceThreadId: { type: "string" },
+          },
+          required: ["targetThreadId", "sourceThreadId"],
+        },
+      },
+      {
+        name: "export_thread",
+        description:
+          "Export a thread and all its events, artifacts, and commitments as portable JSON",
+        inputSchema: {
+          type: "object",
+          properties: { threadId: { type: "string" } },
+          required: ["threadId"],
+        },
+      },
+      {
+        name: "import_thread",
+        description:
+          "Import a previously exported thread JSON (e.g. from another machine or teammate)",
+        inputSchema: {
+          type: "object",
+          properties: { data: { type: "string", description: "JSON string from export_thread" } },
+          required: ["data"],
+        },
       },
     ],
   }));
@@ -366,6 +485,9 @@ async function main(): Promise<void> {
           break;
         case "search_threads":
           result = await toolSearchThreads(input, repos);
+          break;
+        case "search_events":
+          result = await toolSearchEvents(input, repos);
           break;
         case "find_commitments":
           result = await toolFindCommitments(input, repos);
@@ -399,28 +521,42 @@ async function main(): Promise<void> {
         case "list_projects":
           result = await toolListProjects(input, repos);
           break;
+        case "split_thread":
+          result = await toolSplitThread(input, repos);
+          break;
+        case "merge_threads":
+          result = await toolMergeThreads(input, { ...repos, _store: db });
+          break;
+        case "export_thread":
+          result = await toolExportThread(input, repos);
+          break;
+        case "import_thread":
+          result = await toolImportThread(input, repos);
+          break;
         default:
           return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
       }
 
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
       logger.error(`Tool ${name} error`, err);
-      return {
-        content: [{ type: "text", text: `Error: ${String(err)}` }],
-        isError: true,
-      };
+      return { content: [{ type: "text", text: `Error: ${String(err)}` }], isError: true };
     }
   });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  logger.info("Threadline MCP server started");
+  logger.info("Threadline MCP server started", {
+    version: THREADLINE_VERSION,
+    ui: `http://127.0.0.1:${config.daemonPort}/ui`,
+  });
 
   const shutdown = async () => {
+    if (batchTimer) {
+      clearTimeout(batchTimer);
+      await flushBatch();
+    }
     fsWatcher.stop();
     clipWatcher.stop();
     gitWatcher.stop();

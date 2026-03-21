@@ -1,10 +1,10 @@
 import type { Commitment } from "@threadline/common";
-import type { JsonStore } from "../jsonStore.js";
+import type { IStore } from "../iStore.js";
 
 const TABLE = "commitments";
 
 export class CommitmentsRepo {
-  constructor(private store: JsonStore) {}
+  constructor(private store: IStore) {}
 
   insert(commitment: Commitment): void {
     this.store.insertUnique(TABLE, commitment as unknown as Record<string, unknown>, "id");
@@ -38,6 +38,18 @@ export class CommitmentsRepo {
 
   countByThread(threadId: string): number {
     return this.store.count(TABLE, (r) => r.threadId === threadId);
+  }
+
+  updateStatus(id: string, status: Commitment["status"]): void {
+    this.store.updateWhere(
+      TABLE,
+      (r) => r.id === id,
+      (r) => ({ ...r, status, resolvedAt: Date.now() })
+    );
+  }
+
+  deleteByThreadId(threadId: string): number {
+    return this.store.deleteWhere(TABLE, (r) => r.threadId === threadId);
   }
 
   countTotal(): number {

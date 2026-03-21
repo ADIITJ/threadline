@@ -1,18 +1,17 @@
 /**
  * Lightweight synchronous JSON-file-backed store.
- * Provides a simple table abstraction with insert/select/update/delete.
+ * Implements IStore — drop-in replaceable with SqliteStore.
  * Persists atomically by writing a temp file then renaming.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-
-type Row = Record<string, unknown>;
+import { dirname } from "node:path";
+import type { IStore, Row } from "./iStore.js";
 
 interface TableData {
   rows: Row[];
 }
 
-export class JsonStore {
+export class JsonStore implements IStore {
   private data: Record<string, TableData> = {};
   private dbPath: string;
   private dirty = false;
@@ -60,8 +59,7 @@ export class JsonStore {
   }
 
   insert(tableName: string, row: Row): void {
-    const rows = this.table(tableName);
-    rows.push(row);
+    this.table(tableName).push(row);
     this.dirty = true;
     this.scheduleFlush();
   }
@@ -110,6 +108,19 @@ export class JsonStore {
     return count;
   }
 
+  deleteWhere(tableName: string, predicate: (r: Row) => boolean): number {
+    const tbl = this.data[tableName];
+    if (!tbl) return 0;
+    const before = tbl.rows.length;
+    tbl.rows = tbl.rows.filter((r) => !predicate(r));
+    const deleted = before - tbl.rows.length;
+    if (deleted > 0) {
+      this.dirty = true;
+      this.scheduleFlush();
+    }
+    return deleted;
+  }
+
   count(tableName: string, predicate?: (r: Row) => boolean): number {
     const rows = this.data[tableName]?.rows ?? [];
     return predicate ? rows.filter(predicate).length : rows.length;
@@ -122,6 +133,23 @@ export class JsonStore {
     this.dirty = true;
     this.scheduleFlush();
     return true;
+  }
+
+  getSchemaVersion(): number {
+    const meta = this.data._meta?.rows.find((r) => r.key === "schema_version");
+    return meta ? Number(meta.value) : 0;
+  }
+
+  setSchemaVersion(v: number): void {
+    if (!this.data._meta) this.data._meta = { rows: [] };
+    const idx = this.data._meta.rows.findIndex((r) => r.key === "schema_version");
+    if (idx >= 0) {
+      this.data._meta.rows[idx] = { key: "schema_version", value: v };
+    } else {
+      this.data._meta.rows.push({ key: "schema_version", value: v });
+    }
+    this.dirty = true;
+    this.scheduleFlush();
   }
 
   close(): void {
