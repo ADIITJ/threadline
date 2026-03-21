@@ -5,6 +5,9 @@ export type EventSource =
   | "browser"
   | "checkpoint"
   | "active_window"
+  | "claude_session"
+  | "beads_memory"
+  | "claude_task"
   | "system";
 
 export type EventKind =

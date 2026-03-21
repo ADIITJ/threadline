@@ -14,13 +14,17 @@ export class CommitmentsRepo {
     return this.store.find(TABLE, (r) => r.threadId === threadId) as unknown as Commitment[];
   }
 
-  findAll(opts: {
-    status?: Commitment["status"];
-    owner?: string;
-    dueBefore?: string;
-    limit?: number;
-  }): Commitment[] {
+  findAll(
+    opts: {
+      threadId?: string;
+      status?: Commitment["status"];
+      owner?: string;
+      dueBefore?: string;
+      limit?: number;
+    } = {}
+  ): Commitment[] {
     let rows = this.store.findAll(TABLE) as unknown as Commitment[];
+    if (opts.threadId) rows = rows.filter((c) => c.threadId === opts.threadId);
 
     if (opts.status) rows = rows.filter((c) => c.status === opts.status);
     if (opts.owner) rows = rows.filter((c) => c.owner === opts.owner);

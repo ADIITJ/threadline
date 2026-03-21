@@ -12,10 +12,7 @@ const PATTERNS = [
 ];
 const SKIP_DIRS = new Set(["node_modules", "dist", ".turbo", ".git", "coverage", "tests"]);
 // Files that intentionally contain pattern keywords as test data or self-reference
-const SKIP_FILES = new Set([
-  "verify-no-placeholders.mjs",
-  "package-extension.mjs",
-]);
+const SKIP_FILES = new Set(["verify-no-placeholders.mjs", "package-extension.mjs"]);
 const TEXT_EXTS = new Set([
   ".ts",
   ".js",

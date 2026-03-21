@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 /**
  * BrowserHistoryWatcher
  *
@@ -16,12 +17,11 @@
 import { copyFileSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { homedir, platform, tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import type { ThreadlineEvent } from "@threadline/common";
 import { logger } from "../logger.js";
 import { redactSecrets } from "../security/redaction.js";
 import { generateId } from "../utils/hashing.js";
-import { normalizeUrl, extractHostname } from "../utils/urls.js";
+import { extractHostname, normalizeUrl } from "../utils/urls.js";
 
 const POLL_INTERVAL_MS = 60_000; // 1 minute
 
@@ -51,25 +51,28 @@ function chromiumProfiles(): BrowserProfile[] {
     profiles.push(
       { browser: "Chrome", base: join(h(), "Library/Application Support/Google/Chrome") },
       { browser: "Chrome Beta", base: join(h(), "Library/Application Support/Google/Chrome Beta") },
-      { browser: "Brave", base: join(h(), "Library/Application Support/BraveSoftware/Brave-Browser") },
+      {
+        browser: "Brave",
+        base: join(h(), "Library/Application Support/BraveSoftware/Brave-Browser"),
+      },
       { browser: "Arc", base: join(h(), "Library/Application Support/Arc/User Data") },
       { browser: "Edge", base: join(h(), "Library/Application Support/Microsoft Edge") },
       { browser: "Vivaldi", base: join(h(), "Library/Application Support/Vivaldi") },
-      { browser: "Opera", base: join(h(), "Library/Application Support/com.operasoftware.Opera") },
+      { browser: "Opera", base: join(h(), "Library/Application Support/com.operasoftware.Opera") }
     );
   } else if (p === "linux") {
     profiles.push(
       { browser: "Chrome", base: join(h(), ".config/google-chrome") },
       { browser: "Chromium", base: join(h(), ".config/chromium") },
       { browser: "Brave", base: join(h(), ".config/BraveSoftware/Brave-Browser") },
-      { browser: "Edge", base: join(h(), ".config/microsoft-edge") },
+      { browser: "Edge", base: join(h(), ".config/microsoft-edge") }
     );
   } else if (p === "win32") {
     const local = process.env.LOCALAPPDATA ?? "";
     profiles.push(
       { browser: "Chrome", base: join(local, "Google/Chrome/User Data") },
       { browser: "Brave", base: join(local, "BraveSoftware/Brave-Browser/User Data") },
-      { browser: "Edge", base: join(local, "Microsoft/Edge/User Data") },
+      { browser: "Edge", base: join(local, "Microsoft/Edge/User Data") }
     );
   }
 
@@ -84,12 +87,18 @@ function chromiumProfiles(): BrowserProfile[] {
           profileDirs.push(entry.name);
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     for (const dir of profileDirs) {
       const historyPath = join(base, dir, "History");
       if (existsSync(historyPath)) {
-        result.push({ browser: profileDirs.length > 1 ? `${browser} (${dir})` : browser, kind: "chromium", historyPath });
+        result.push({
+          browser: profileDirs.length > 1 ? `${browser} (${dir})` : browser,
+          kind: "chromium",
+          historyPath,
+        });
       }
     }
   }
@@ -101,7 +110,8 @@ function firefoxProfiles(): BrowserProfile[] {
   let profilesBase = "";
   if (p === "darwin") profilesBase = join(h(), "Library/Application Support/Firefox/Profiles");
   else if (p === "linux") profilesBase = join(h(), ".mozilla/firefox");
-  else if (p === "win32") profilesBase = join(process.env.APPDATA ?? "", "Mozilla/Firefox/Profiles");
+  else if (p === "win32")
+    profilesBase = join(process.env.APPDATA ?? "", "Mozilla/Firefox/Profiles");
 
   if (!profilesBase || !existsSync(profilesBase)) return [];
 
@@ -115,7 +125,9 @@ function firefoxProfiles(): BrowserProfile[] {
         break; // only primary profile
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return result;
 }
 
@@ -178,9 +190,16 @@ function safariTsToMs(safariTs: string): number {
 }
 
 const IGNORED_URL_PREFIXES = [
-  "chrome://", "chrome-extension://", "brave://",
-  "about:", "edge://", "firefox://", "moz-extension://",
-  "data:", "blob:", "javascript:",
+  "chrome://",
+  "chrome-extension://",
+  "brave://",
+  "about:",
+  "edge://",
+  "firefox://",
+  "moz-extension://",
+  "data:",
+  "blob:",
+  "javascript:",
 ];
 
 function shouldIgnoreUrl(url: string): boolean {
@@ -201,7 +220,9 @@ export class BrowserHistoryWatcher {
     this.hasSqlite = sqlite3Available();
 
     if (!this.hasSqlite) {
-      logger.warn("BrowserHistoryWatcher: sqlite3 CLI not found — browser history polling disabled");
+      logger.warn(
+        "BrowserHistoryWatcher: sqlite3 CLI not found — browser history polling disabled"
+      );
       return;
     }
 
@@ -245,7 +266,7 @@ export class BrowserHistoryWatcher {
         const sinceChrome = (since + CHROME_EPOCH_OFFSET_MS) * 1000;
         rows = querySqlite(
           tmp,
-          `SELECT url, title, last_visit_time FROM urls WHERE last_visit_time > ${sinceChrome} ORDER BY last_visit_time DESC LIMIT 100`,
+          `SELECT url, title, last_visit_time FROM urls WHERE last_visit_time > ${sinceChrome} ORDER BY last_visit_time DESC LIMIT 100`
         );
         for (const [url, title, ts] of rows) {
           const visitMs = chromiumTsToMs(ts);
@@ -259,7 +280,7 @@ export class BrowserHistoryWatcher {
         const sinceFF = since * 1000; // Firefox uses microseconds since Unix epoch
         rows = querySqlite(
           tmp,
-          `SELECT url, title, last_visit_date FROM moz_places WHERE last_visit_date > ${sinceFF} AND url NOT LIKE 'about:%' AND url NOT LIKE 'moz-%' ORDER BY last_visit_date DESC LIMIT 100`,
+          `SELECT url, title, last_visit_date FROM moz_places WHERE last_visit_date > ${sinceFF} AND url NOT LIKE 'about:%' AND url NOT LIKE 'moz-%' ORDER BY last_visit_date DESC LIMIT 100`
         );
         for (const [url, title, ts] of rows) {
           const visitMs = firefoxTsToMs(ts);
@@ -274,7 +295,7 @@ export class BrowserHistoryWatcher {
         const sinceSafari = (since - MAC_EPOCH_OFFSET_MS) / 1000;
         rows = querySqlite(
           tmp,
-          `SELECT history_items.url, history_visits.title, history_visits.visit_time FROM history_visits JOIN history_items ON history_visits.history_item = history_items.id WHERE history_visits.visit_time > ${sinceSafari} ORDER BY history_visits.visit_time DESC LIMIT 100`,
+          `SELECT history_items.url, history_visits.title, history_visits.visit_time FROM history_visits JOIN history_items ON history_visits.history_item = history_items.id WHERE history_visits.visit_time > ${sinceSafari} ORDER BY history_visits.visit_time DESC LIMIT 100`
         );
         for (const [url, title, ts] of rows) {
           const visitMs = safariTsToMs(ts);
@@ -286,7 +307,11 @@ export class BrowserHistoryWatcher {
         }
       }
     } finally {
-      try { rmSync(tmp); } catch { /* best effort */ }
+      try {
+        rmSync(tmp);
+      } catch {
+        /* best effort */
+      }
     }
   }
 

@@ -4,7 +4,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { THREADLINE_VERSION } from "@threadline/common";
 import { ActiveWindowWatcher } from "./collectors/activeWindow.js";
+import { BeadsMemoryWatcher } from "./collectors/beadsMemoryWatcher.js";
 import { BrowserHistoryWatcher } from "./collectors/browserHistoryWatcher.js";
+import { ClaudeSessionWatcher } from "./collectors/claudeSessionWatcher.js";
+import { ClaudeTaskWatcher } from "./collectors/claudeTaskWatcher.js";
 import { ClipboardWatcher } from "./collectors/clipboardWatcher.js";
 import { FilesystemWatcher } from "./collectors/filesystemWatcher.js";
 import { GitWatcher } from "./collectors/gitWatcher.js";
@@ -29,6 +32,7 @@ import { toolFindCommitments } from "./tools/findCommitments.js";
 import { toolGetThreadDetails } from "./tools/getThreadDetails.js";
 import { toolGetThreadTimeline } from "./tools/getThreadTimeline.js";
 import { toolHealth } from "./tools/health.js";
+import { toolListProjects } from "./tools/listProjects.js";
 import { toolListRecentThreads } from "./tools/listRecentThreads.js";
 import { toolOpenThreadArtifacts } from "./tools/openThreadArtifacts.js";
 import { toolPrepareHandoff } from "./tools/prepareHandoff.js";
@@ -55,6 +59,9 @@ async function runDoctor(config: ReturnType<typeof loadConfig>): Promise<void> {
     ["git", config.enableGitWatcher],
     ["browser_ingest", config.enableBrowserIngest],
     ["browser_history", config.enableBrowserHistoryWatcher],
+    ["claude_sessions", config.enableClaudeSessionWatcher],
+    ["beads_memory", config.enableBeadsMemoryWatcher],
+    ["claude_tasks", config.enableClaudeTaskWatcher],
     ["active_window", config.enableActiveWindowWatcher],
   ];
   if (config.enableBrowserHistoryWatcher) {
@@ -110,6 +117,9 @@ async function main(): Promise<void> {
   const gitWatcher = new GitWatcher();
   const awWatcher = new ActiveWindowWatcher();
   const bhWatcher = new BrowserHistoryWatcher();
+  const csWatcher = new ClaudeSessionWatcher();
+  const bmWatcher = new BeadsMemoryWatcher();
+  const ctWatcher = new ClaudeTaskWatcher();
 
   const ingestEvent = async (event: import("@threadline/common").ThreadlineEvent) => {
     repos.events.insert(event);
@@ -130,6 +140,15 @@ async function main(): Promise<void> {
   }
   if (config.enableBrowserHistoryWatcher) {
     bhWatcher.start((ev) => void ingestEvent(ev));
+  }
+  if (config.enableClaudeSessionWatcher) {
+    csWatcher.start((ev) => void ingestEvent(ev));
+  }
+  if (config.enableBeadsMemoryWatcher) {
+    bmWatcher.start((ev) => void ingestEvent(ev));
+  }
+  if (config.enableClaudeTaskWatcher) {
+    ctWatcher.start((ev) => void ingestEvent(ev));
   }
 
   // Start daemon
@@ -312,6 +331,12 @@ async function main(): Promise<void> {
           "Undo the last safe_clean_downloads operation, restoring files to their original locations",
         inputSchema: { type: "object", properties: {}, required: [] },
       },
+      {
+        name: "list_projects",
+        description:
+          "List all detected projects with their threads, active status, and open commitments. Projects are grouped by working directory and git repo.",
+        inputSchema: { type: "object", properties: {}, required: [] },
+      },
     ],
   }));
 
@@ -371,6 +396,9 @@ async function main(): Promise<void> {
         case "undo_last_cleanup":
           result = await toolUndoLastCleanup({}, repos.cleanup);
           break;
+        case "list_projects":
+          result = await toolListProjects(input, repos);
+          break;
         default:
           return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
       }
@@ -398,6 +426,9 @@ async function main(): Promise<void> {
     gitWatcher.stop();
     awWatcher.stop();
     bhWatcher.stop();
+    csWatcher.stop();
+    bmWatcher.stop();
+    ctWatcher.stop();
     stopScheduler();
     await daemon.stop();
     await server.close();

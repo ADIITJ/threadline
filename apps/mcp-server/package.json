@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run",
+    "test": "echo 'Tests run from root workspace'",
     "clean": "rm -rf dist"
   },
   "dependencies": {

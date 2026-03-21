@@ -14,5 +14,7 @@ export interface Thread {
   repoPaths: string[];
   urls: string[];
   checkpointIds: string[];
+  project?: string;
+  projectPath?: string;
   metadata: Record<string, unknown>;
 }

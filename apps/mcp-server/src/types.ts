@@ -16,6 +16,9 @@ export interface ThreadlineConfig {
   enableGitWatcher: boolean;
   enableActiveWindowWatcher: boolean;
   enableBrowserHistoryWatcher: boolean;
+  enableClaudeSessionWatcher: boolean;
+  enableBeadsMemoryWatcher: boolean;
+  enableClaudeTaskWatcher: boolean;
   allowPaths: string[];
   denyPaths: string[];
   ignorePrivateBrowser: boolean;

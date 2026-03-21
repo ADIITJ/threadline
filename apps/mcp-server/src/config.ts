@@ -21,6 +21,9 @@ export function loadConfig(homeDir?: string): ThreadlineConfig {
     enableGitWatcher: true,
     enableActiveWindowWatcher: false,
     enableBrowserHistoryWatcher: true,
+    enableClaudeSessionWatcher: true,
+    enableBeadsMemoryWatcher: true,
+    enableClaudeTaskWatcher: true,
     allowPaths: [
       join(homedir(), "Desktop"),
       join(homedir(), "Downloads"),
