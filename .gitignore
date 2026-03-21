@@ -9,3 +9,4 @@ coverage/
 .DS_Store
 *.zip
 !dist/*.zip
+launch-strategy.md
